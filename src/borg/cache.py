@@ -5,6 +5,7 @@ import stat
 from binascii import unhexlify
 from collections import namedtuple
 from time import perf_counter
+from time import sleep
 
 from .logger import create_logger
 
@@ -551,8 +552,19 @@ class LocalCache(CacheStatsMixin):
         shutil.copy(os.path.join(self.path, 'chunks'), txn_dir)
         pi.output('Initializing cache transaction: Reading files')
         shutil.copy(os.path.join(self.path, 'files'), txn_dir)
-        os.rename(os.path.join(self.path, 'txn.tmp'),
-                  os.path.join(self.path, 'txn.active'))
+        retry = True
+        while retry:
+            try:
+                retry = False
+                os.rename(os.path.join(self.path, 'txn.tmp'),
+                          os.path.join(self.path, 'txn.active'))
+            except PermissionError as e:
+                logger.warning("BB Got permission error: %s" % e)
+                if str(e).find("[Errno 13]") >= 0:
+                   retry = True
+                   sleep(1)
+                else:
+                   raise e
         self.txn_active = True
         pi.finish()
 
